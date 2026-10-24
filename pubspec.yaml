@@ -1,0 +1,67 @@
+name: tasks_for_allah
+description: A family prayer tracker that turns daily prayers and good deeds into points, streaks and progress.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.4.0
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management & navigation
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.6.2
+
+  # Persistence & files
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  file_picker: ^13.1.0
+  share_plus: ^13.3.1
+
+  # Reminders
+  flutter_local_notifications: ^17.2.4
+  timezone: ^0.9.4
+  flutter_timezone: ^5.1.1
+
+  # Motion
+  flutter_animate: ^4.5.2
+  confetti: ^0.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.2
+  flutter_native_splash: ^2.4.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: Emirates
+      fonts:
+        - asset: assets/fonts/Emirates.ttf
+    - family: Bliss
+      fonts:
+        - asset: assets/fonts/Bliss.ttf
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/app_icon.png
+  remove_alpha_ios: true
+  adaptive_icon_background: '#D4F5F0'
+  adaptive_icon_foreground: assets/icon/app_icon.png
+
+flutter_native_splash:
+  color: '#E0F8F5'
+  color_dark: '#071E20'
+  image: assets/images/logo.jpg
+  android_12:
+    color: '#E0F8F5'
+    color_dark: '#071E20'
+    image: assets/images/logo.jpg
