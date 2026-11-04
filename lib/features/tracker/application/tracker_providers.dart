@@ -28,7 +28,7 @@ class TrackerNotifier extends Notifier<TrackerData> {
     return _repo.load();
   }
 
-  Future<void> selectPerson(PersonId id) => _commit(state.copyWith(activePerson: id));
+  Future<void> selectPerson(String id) => _commit(state.copyWith(activePerson: id));
 
   Future<void> clearPerson() => _commit(state.copyWith(clearActivePerson: true));
 
@@ -37,19 +37,51 @@ class TrackerNotifier extends Notifier<TrackerData> {
     if (person == null) return;
     final personEntries = Map<String, DayEntry>.of(state.entriesFor(person))
       ..[dateKey] = entry;
-    final next = Map<PersonId, Map<String, DayEntry>>.of(state.entries)
+    final next = Map<String, Map<String, DayEntry>>.of(state.entries)
       ..[person] = personEntries;
     await _commit(state.copyWith(entries: next));
   }
 
-  /// Replaces all entries with the ones from [backup]; keeps who is using the device.
+  /// Adds [profile] and makes it the active one.
+  Future<void> addProfile(Profile profile) async {
+    final profiles = [...state.profiles, profile];
+    await _commit(
+      state.copyWith(profiles: profiles, activePerson: profile.id),
+    );
+  }
+
+  Future<void> updateProfile(Profile profile) => _commit(state.copyWith(
+        profiles: [for (final p in state.profiles) p.id == profile.id ? profile : p],
+      ));
+
+  /// Removes a profile and its entries. The last remaining profile cannot be
+  /// deleted. Deleting the active one switches to the first survivor.
+  Future<void> deleteProfile(String id) async {
+    if (state.profiles.length <= 1) return;
+    final profiles = [for (final p in state.profiles) if (p.id != id) p];
+    final entries = Map<String, Map<String, DayEntry>>.of(state.entries)..remove(id);
+    final active = state.activePerson == id ? profiles.first.id : state.activePerson;
+    await _commit(state.copyWith(
+      profiles: profiles,
+      entries: entries,
+      activePerson: active,
+    ));
+  }
+
+  /// Replaces all entries with the ones from [backup]; keeps who is using the
+  /// device when their profile still exists afterwards.
   Future<void> restore(TrackerData backup) => _commit(TrackerData(
-        activePerson: state.activePerson ?? backup.activePerson,
+        profiles: backup.profiles.isNotEmpty ? backup.profiles : state.profiles,
+        activePerson: backup.profiles.any((p) => p.id == state.activePerson)
+            ? state.activePerson
+            : backup.activePerson,
         entries: backup.entries,
       ));
 
-  Future<void> resetAll() =>
-      _commit(TrackerData(activePerson: state.activePerson));
+  Future<void> resetAll() => _commit(TrackerData(
+        profiles: state.profiles,
+        activePerson: state.activePerson,
+      ));
 
   Future<void> _commit(TrackerData next) async {
     state = next;
@@ -60,13 +92,24 @@ class TrackerNotifier extends Notifier<TrackerData> {
 final trackerProvider =
     NotifierProvider<TrackerNotifier, TrackerData>(TrackerNotifier.new);
 
-final activePersonProvider = Provider<PersonId?>(
+/// Id of the profile using the device, or `null` when nobody is chosen.
+final activePersonProvider = Provider<String?>(
   (ref) => ref.watch(trackerProvider.select((d) => d.activePerson)),
 );
 
-final activeProfileProvider = Provider<Person?>((ref) {
-  final id = ref.watch(activePersonProvider);
-  return id == null ? null : Person.of(id);
+/// All profiles on this device.
+final profilesProvider = Provider<List<Profile>>(
+  (ref) => ref.watch(trackerProvider.select((d) => d.profiles)),
+);
+
+final activeProfileProvider = Provider<Profile?>((ref) {
+  final data = ref.watch(trackerProvider);
+  final id = data.activePerson;
+  if (id == null) return null;
+  for (final p in data.profiles) {
+    if (p.id == id) return p;
+  }
+  return null;
 });
 
 /// Entries of the active person.
@@ -83,8 +126,8 @@ final streakProvider = Provider<int>((ref) {
 typedef MonthKey = ({int year, int month});
 
 final monthSummaryProvider = Provider.family<MonthSummary, MonthKey>((ref, key) {
-  final person = ref.watch(activePersonProvider);
-  if (person == null) {
+  final profile = ref.watch(activeProfileProvider);
+  if (profile == null) {
     return const MonthSummary(
       points: 0,
       daysLogged: 0,
@@ -96,7 +139,7 @@ final monthSummaryProvider = Provider.family<MonthSummary, MonthKey>((ref, key) 
     );
   }
   return StatsCalculator.month(
-    person,
+    profile,
     ref.watch(entriesProvider),
     key.year,
     key.month,
@@ -105,22 +148,27 @@ final monthSummaryProvider = Provider.family<MonthSummary, MonthKey>((ref, key) 
 });
 
 final lastDaysProvider = Provider.family<List<DayPoints>, int>((ref, count) {
-  final person = ref.watch(activePersonProvider);
-  if (person == null) return const [];
+  final profile = ref.watch(activeProfileProvider);
+  if (profile == null) return const [];
   return StatsCalculator.lastDays(
-    person,
+    profile,
     ref.watch(entriesProvider),
     ref.watch(todayProvider),
     count,
   );
 });
 
-/// This month's points for everyone with data on this device (family board).
-final familyMonthPointsProvider = Provider<Map<PersonId, int>>((ref) {
+/// This month's points for every profile with data on this device.
+final familyMonthPointsProvider = Provider<Map<Profile, double>>((ref) {
   final data = ref.watch(trackerProvider);
   final today = ref.watch(todayProvider);
   return {
-    for (final id in PersonId.values)
-      id: StatsCalculator.monthPoints(id, data.entriesFor(id), today.year, today.month),
+    for (final profile in data.profiles)
+      profile: StatsCalculator.monthPoints(
+        profile,
+        data.entriesFor(profile.id),
+        today.year,
+        today.month,
+      ),
   };
 });

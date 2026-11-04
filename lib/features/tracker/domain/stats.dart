@@ -33,10 +33,10 @@ class MonthSummary {
     required this.prayedTotal,
   });
 
-  final int points;
+  final double points;
   final int daysLogged;
   final int daysElapsed;
-  final int maxPossible;
+  final double maxPossible;
   final List<PrayerBreakdown> breakdown;
   final int jamaatCount;
   final int prayedTotal;
@@ -52,7 +52,7 @@ class DayPoints {
   final DateTime date;
 
   /// `null` when nothing was logged that day.
-  final int? points;
+  final double? points;
   final bool isToday;
 }
 
@@ -74,7 +74,8 @@ abstract final class StatsCalculator {
 
   /// [month] is 1-based.
   static Map<String, DayEntry> entriesInMonth(
-      Map<String, DayEntry> entries, int year, int month) {
+    Map<String, DayEntry> entries, int year, int month,
+  ) {
     final prefix = '$year-${month.toString().padLeft(2, '0')}-';
     return {
       for (final e in entries.entries)
@@ -82,24 +83,26 @@ abstract final class StatsCalculator {
     };
   }
 
-  static int monthPoints(
-      PersonId person, Map<String, DayEntry> entries, int year, int month) {
-    var total = 0;
+  static double monthPoints(
+    Profile profile, Map<String, DayEntry> entries, int year, int month,
+  ) {
+    var total = 0.0;
     for (final e in entriesInMonth(entries, year, month).values) {
-      total += ScoringRules.entryPoints(person, e);
+      total += ScoringRules.entryPoints(profile, e);
     }
     return total;
   }
 
   static MonthSummary month(
-    PersonId person,
+    Profile profile,
     Map<String, DayEntry> entries,
     int year,
     int month,
     DateTime today,
   ) {
     final monthEntries = entriesInMonth(entries, year, month).values.toList();
-    final points = monthEntries.fold(0, (s, e) => s + ScoringRules.entryPoints(person, e));
+    final points =
+        monthEntries.fold(0.0, (s, e) => s + ScoringRules.entryPoints(profile, e));
 
     final int elapsed;
     if (year == today.year && month == today.month) {
@@ -120,7 +123,7 @@ abstract final class StatsCalculator {
         final status = e.statusOf(prayer);
         if (status == PrayerStatus.missed) continue;
         count++;
-        pts += ScoringRules.prayerPoints(person, prayer, status);
+        pts += ScoringRules.prayerPoints(profile, prayer, status);
         if (status == PrayerStatus.jamaat) jamaat++;
       }
       prayedTotal += count;
@@ -136,7 +139,7 @@ abstract final class StatsCalculator {
       points: points,
       daysLogged: monthEntries.length,
       daysElapsed: elapsed,
-      maxPossible: elapsed * ScoringRules.maxDailyPoints(person),
+      maxPossible: elapsed * ScoringRules.maxDailyPoints(profile),
       breakdown: breakdown,
       jamaatCount: jamaat,
       prayedTotal: prayedTotal,
@@ -145,7 +148,7 @@ abstract final class StatsCalculator {
 
   /// The last [count] days ending today, oldest first.
   static List<DayPoints> lastDays(
-    PersonId person,
+    Profile profile,
     Map<String, DayEntry> entries,
     DateTime today,
     int count,
@@ -157,7 +160,7 @@ abstract final class StatsCalculator {
           final entry = entries[toDateKey(date)];
           return DayPoints(
             date: date,
-            points: entry == null ? null : ScoringRules.entryPoints(person, entry),
+            points: entry == null ? null : ScoringRules.entryPoints(profile, entry),
             isToday: i == 0,
           );
         }(),

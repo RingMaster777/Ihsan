@@ -1,7 +1,11 @@
 /// App-wide constants.
 abstract final class AppConstants {
-  static const appName = 'Tasks for Allah';
-  static const tagline = 'Daily Prayer Tracker';
+  static const appName = 'Ihsan';
+  static const appNameArabic = 'إحسان';
+
+  /// Ihsan: "Excellence in worship; to act as though you see Allah."
+  static const tagline = 'Excellence in worship; to act as though you see Allah.';
+  static const taglineShort = 'Excellence in worship';
 
   /// SharedPreferences key. Same as the original HTML prototype so that its
   /// JSON backups can be restored here unchanged.

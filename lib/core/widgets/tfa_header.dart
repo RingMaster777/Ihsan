@@ -76,7 +76,7 @@ class TfaHeader extends ConsumerWidget {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       PersonAvatar(
-                                        person: person,
+                                        profile: person,
                                         size: 28,
                                         borderWidth: 2,
                                         borderColor: Colors.white70,

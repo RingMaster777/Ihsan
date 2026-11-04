@@ -74,3 +74,20 @@ String relativeDayLabel(DateTime date, DateTime today) {
   if (diff == 1) return 'Yesterday';
   return formatShortDate(date);
 }
+
+/// `4:32 PM` style clock label.
+String formatClock(DateTime d) {
+  final hour12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final amPm = d.hour < 12 ? 'AM' : 'PM';
+  return '$hour12:${_two(d.minute)} $amPm';
+}
+
+/// `1h 20m` style duration label.
+String formatCountdown(Duration d) {
+  if (d.isNegative) return 'now';
+  final hours = d.inHours;
+  final minutes = d.inMinutes % 60;
+  if (hours == 0) return '${minutes}m';
+  if (minutes == 0) return '${hours}h';
+  return '${hours}h ${minutes}m';
+}

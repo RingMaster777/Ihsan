@@ -14,13 +14,13 @@ class BackupService {
 
   Future<void> exportAndShare(TrackerData data) async {
     final dir = await getTemporaryDirectory();
-    final name = 'TasksForAllah_backup_${toDateKey(DateTime.now())}.json';
+    final name = 'Ihsan_backup_${toDateKey(DateTime.now())}.json';
     final file = File('${dir.path}/$name');
     await file.writeAsString(_repository.encode(data, pretty: true));
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'application/json', name: name)],
-        subject: 'Tasks for Allah backup',
+        subject: 'Ihsan backup',
       ),
     );
   }

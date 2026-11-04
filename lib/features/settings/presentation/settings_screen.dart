@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tasks_for_allah/core/constants/app_constants.dart';
+import 'package:tasks_for_allah/core/services/prayer_times_service.dart';
 import 'package:tasks_for_allah/core/theme/app_palette.dart';
+import 'package:tasks_for_allah/core/utils/date_helpers.dart';
 import 'package:tasks_for_allah/core/widgets/app_card.dart';
 import 'package:tasks_for_allah/core/widgets/app_snack.dart';
 import 'package:tasks_for_allah/core/widgets/entrance_animation.dart';
 import 'package:tasks_for_allah/core/widgets/tfa_header.dart';
 import 'package:tasks_for_allah/features/profile/domain/person.dart';
+import 'package:tasks_for_allah/features/profile/presentation/profile_edit_sheet.dart';
 import 'package:tasks_for_allah/features/profile/presentation/widgets/person_avatar.dart';
+import 'package:tasks_for_allah/features/tracker/domain/prayer.dart';
+import 'package:tasks_for_allah/features/settings/application/prayer_settings.dart';
 import 'package:tasks_for_allah/features/settings/application/reminder.dart';
 import 'package:tasks_for_allah/features/settings/data/backup_service.dart';
 import 'package:tasks_for_allah/features/tracker/application/tracker_providers.dart';
@@ -21,6 +27,9 @@ class SettingsScreen extends ConsumerWidget {
 
     final p = context.palette;
     final reminder = ref.watch(reminderProvider);
+    final profiles = ref.watch(profilesProvider);
+    final prayerSettings = ref.watch(prayerSettingsProvider);
+    final prayerTimes = ref.watch(prayerTimesTodayProvider);
 
     final sections = <Widget>[
       _ProfileCard(
@@ -35,6 +44,114 @@ class SettingsScreen extends ConsumerWidget {
           );
           if (ok) await ref.read(trackerProvider.notifier).clearPerson();
         },
+        onEdit: () => showProfileEditSheet(context, existing: person),
+      ),
+      _Section(
+        title: 'Family profiles',
+        children: [
+          for (final profile in profiles)
+            _Tile(
+              icon: Icons.person_rounded,
+              iconColor: p.tone(profile.accent),
+              title: profile.name + (profile.id == person.id ? '  ·  using now' : ''),
+              subtitle: profile.role,
+              leading: PersonAvatar(profile: profile, size: 40, borderWidth: 0, shadow: false),
+              onTap: () async {
+                if (profile.id == person.id) {
+                  showProfileEditSheet(context, existing: profile);
+                  return;
+                }
+                await ref.read(trackerProvider.notifier).selectPerson(profile.id);
+                if (context.mounted) {
+                  showAppSnack(context, 'Now tracking ${profile.name} 🌸',
+                      icon: Icons.swap_horiz_rounded);
+                }
+              },
+              trailing: IconButton(
+                tooltip: 'Edit',
+                icon: Icon(Icons.edit_rounded,
+                    size: 19, color: p.tone(profile.accent)),
+                onPressed: () => showProfileEditSheet(context, existing: profile),
+              ),
+            ),
+          _Tile(
+            icon: Icons.person_add_rounded,
+            title: 'Add profile',
+            subtitle: 'Track another family member',
+            trailing: Icon(Icons.add_rounded, color: p.textMuted),
+            onTap: () => showProfileEditSheet(context),
+          ),
+        ],
+      ),
+      _Section(
+        title: 'Prayer times',
+        children: [
+          _Tile(
+            icon: Icons.location_on_rounded,
+            title: 'City',
+            subtitle: '${prayerSettings.city.name}, ${prayerSettings.city.country}',
+            trailing: Icon(Icons.chevron_right_rounded, color: p.textMuted),
+            onTap: () => _pickCity(context, ref),
+          ),
+          _Tile(
+            icon: Icons.calculate_rounded,
+            title: 'Calculation method',
+            subtitle: prayerSettings.method.label,
+            trailing: Icon(Icons.chevron_right_rounded, color: p.textMuted),
+            onTap: () => _pickMethod(context, ref),
+          ),
+          _Tile(
+            icon: Icons.menu_book_rounded,
+            title: 'Asr calculation',
+            subtitle: prayerSettings.madhab == AsrMadhab.hanafi
+                ? 'Hanafi (standard in South Asia)'
+                : 'Shafi\'i / Standard',
+            trailing: SegmentedButton<AsrMadhab>(
+              segments: const [
+                ButtonSegment(value: AsrMadhab.hanafi, label: Text('Hanafi')),
+                ButtonSegment(value: AsrMadhab.shafi, label: Text('Shafi')),
+              ],
+              selected: {prayerSettings.madhab},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) =>
+                  ref.read(prayerSettingsProvider.notifier).setMadhab(selection.first),
+            ),
+          ),
+          _Tile(
+            icon: Icons.notifications_active_rounded,
+            title: 'Prayer reminders',
+            subtitle: 'A nudge at each prayer time',
+            trailing: Switch(
+              value: prayerSettings.notifyPrayers,
+              onChanged: (v) async {
+                await ref.read(prayerSettingsProvider.notifier).setNotifyPrayers(v);
+                if (v) {
+                  await ref.read(notificationServiceProvider).requestPermission();
+                }
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final prayer in PrayerType.values)
+                  Column(
+                    children: [
+                      Text(prayer.abbreviation,
+                          style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.w800, color: p.textMuted)),
+                      const SizedBox(height: 2),
+                      Text(formatClock(prayerTimes.timeFor(prayer)),
+                          style: TextStyle(
+                              fontSize: 10.5, fontWeight: FontWeight.w700, color: p.textBody)),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
       _Section(
         title: 'Reminder',
@@ -147,8 +264,44 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _backup(BuildContext context, WidgetRef ref) async {
-    try {
+  Future<void> _pickCity(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(prayerSettingsProvider.notifier);
+    final city = await showDialog<City>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Choose your city'),
+        children: [
+          for (final c in Cities.list)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(c),
+              child: Text('${c.name}  ·  ${c.country}',
+                  style: const TextStyle(fontSize: 14.5)),
+            ),
+        ],
+      ),
+    );
+    if (city != null) await notifier.setCity(city);
+  }
+
+  Future<void> _pickMethod(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(prayerSettingsProvider.notifier);
+    final method = await showDialog<CalcMethod>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Calculation method'),
+        children: [
+          for (final m in CalcMethod.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(m),
+              child: Text(m.label, style: const TextStyle(fontSize: 14.5)),
+            ),
+        ],
+      ),
+    );
+    if (method != null) await notifier.setMethod(method);
+  }
+
+  Future<void> _backup(BuildContext context, WidgetRef ref) async {    try {
       final repo = ref.read(trackerRepositoryProvider);
       await BackupService(repo).exportAndShare(ref.read(trackerProvider));
     } catch (_) {
@@ -218,9 +371,11 @@ Future<bool> _confirm(
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.person, required this.onSwitch});
-  final Person person;
+  const _ProfileCard({required this.person, required this.onSwitch, required this.onEdit});
+
+  final Profile person;
   final VoidCallback onSwitch;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +385,7 @@ class _ProfileCard extends StatelessWidget {
       borderColor: person.accentSoft,
       child: Row(
         children: [
-          PersonAvatar(person: person, size: 64, borderColor: person.accentSoft),
+          PersonAvatar(profile: person, size: 64, borderColor: person.accentSoft),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -241,6 +396,11 @@ class _ProfileCard extends StatelessWidget {
                 Text(person.role, style: TextStyle(fontSize: 12.5, color: p.textMuted)),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Edit profile',
+            onPressed: onEdit,
+            icon: Icon(Icons.edit_rounded, size: 20, color: accent),
           ),
           OutlinedButton.icon(
             onPressed: onSwitch,
@@ -293,6 +453,7 @@ class _Tile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.trailing,
+    this.leading,
     this.onTap,
     this.iconColor,
   });
@@ -301,6 +462,9 @@ class _Tile extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget? trailing;
+
+  /// Optional avatar that replaces the default icon box.
+  final Widget? leading;
   final VoidCallback? onTap;
   final Color? iconColor;
 
@@ -315,15 +479,16 @@ class _Tile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: p.chip,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(icon, size: 21, color: iconColor ?? p.primary),
-              ),
+              leading ??
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: p.chip,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(icon, size: 21, color: iconColor ?? p.primary),
+                  ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -357,12 +522,22 @@ class _AboutCard extends StatelessWidget {
           child: Image.asset('assets/images/logo.jpg', width: 58, height: 58),
         ),
         const SizedBox(height: 10),
-        const Text(
-          'Tasks for Allah',
-          style: TextStyle(fontFamily: 'Bliss', fontSize: 20),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(AppConstants.appName, style: TextStyle(fontFamily: 'Bliss', fontSize: 20)),
+            const SizedBox(width: 8),
+            Text(AppConstants.appNameArabic, style: TextStyle(fontSize: 15, color: p.textBody)),
+          ],
         ),
         const SizedBox(height: 2),
         Text('Version 1.0.0', style: TextStyle(fontSize: 11.5, color: p.textMuted)),
+        const SizedBox(height: 6),
+        Text(
+          AppConstants.tagline,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11.5, color: p.textBody),
+        ),
         const SizedBox(height: 6),
         Text(
           'Made with love for the family 🤍',

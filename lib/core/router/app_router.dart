@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tasks_for_allah/core/router/app_shell.dart';
 import 'package:tasks_for_allah/core/router/routes.dart';
-import 'package:tasks_for_allah/features/profile/domain/person.dart';
 import 'package:tasks_for_allah/features/profile/presentation/profile_picker_screen.dart';
 import 'package:tasks_for_allah/features/settings/presentation/settings_screen.dart';
 import 'package:tasks_for_allah/features/tracker/application/tracker_providers.dart';
@@ -18,7 +17,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   // Re-run `redirect` whenever the active person changes (pick / switch).
   final refresh = ValueNotifier<int>(0);
   ref.onDispose(refresh.dispose);
-  ref.listen<PersonId?>(activePersonProvider, (_, __) => refresh.value++);
+  ref.listen<String?>(activePersonProvider, (_, __) => refresh.value++);
 
   final router = GoRouter(
     navigatorKey: _rootNavigatorKey,

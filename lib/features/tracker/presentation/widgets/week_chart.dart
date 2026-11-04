@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:tasks_for_allah/core/theme/app_palette.dart';
 import 'package:tasks_for_allah/core/utils/date_helpers.dart';
+import 'package:tasks_for_allah/features/tracker/domain/scoring.dart';
 import 'package:tasks_for_allah/features/tracker/domain/stats.dart';
 
 /// Animated bar chart of the last few days' points.
@@ -10,7 +11,7 @@ class WeekChart extends StatelessWidget {
   const WeekChart({super.key, required this.days, required this.maxPoints});
 
   final List<DayPoints> days;
-  final int maxPoints;
+  final double maxPoints;
 
   static const double _barArea = 92;
 
@@ -40,7 +41,7 @@ class _Bar extends StatelessWidget {
 
   final DayPoints day;
   final int index;
-  final int maxPoints;
+  final double maxPoints;
   final AppPalette palette;
 
   @override
@@ -49,7 +50,7 @@ class _Bar extends StatelessWidget {
     final pts = day.points;
     final target = pts == null
         ? 6.0
-        : math.max(8.0, (pts / math.max(1, maxPoints)) * WeekChart._barArea);
+        : math.max(8.0, (pts / math.max(1.0, maxPoints)) * WeekChart._barArea);
 
     final gradient = day.isToday
         ? p.greenGradient.reversed.toList()
@@ -59,7 +60,7 @@ class _Bar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Text(
-          pts == null ? '' : '$pts',
+          pts == null ? '' : formatPoints(pts),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,

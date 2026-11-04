@@ -69,7 +69,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final today = ref.watch(todayProvider);
     final entries = ref.watch(entriesProvider);
     final isCurrent = _isCurrentMonth(today);
-    final monthPts = StatsCalculator.monthPoints(person.id, entries, _year, _month);
+    final monthPts = StatsCalculator.monthPoints(person, entries, _year, _month);
 
     void open(DateTime d) => context.push(AppRoutes.entry(toDateKey(d)));
 
@@ -78,7 +78,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             year: _year,
             month: _month,
             today: today,
-            person: person.id,
+            person: person,
             entries: entries,
             onTap: open,
           )
@@ -86,7 +86,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             year: _year,
             month: _month,
             today: today,
-            person: person.id,
+            person: person,
             entries: entries,
             onTap: open,
           );
@@ -144,6 +144,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         const SizedBox(width: 6),
                         AnimatedCounter(
                           value: monthPts,
+                          format: formatPoints,
                           suffix: ' pts',
                           duration: const Duration(milliseconds: 500),
                           style: TextStyle(
@@ -290,7 +291,7 @@ class _CalendarGrid extends StatelessWidget {
   final int year;
   final int month;
   final DateTime today;
-  final PersonId person;
+  final Profile person;
   final Map<String, DayEntry> entries;
   final ValueChanged<DateTime> onTap;
 
@@ -365,7 +366,7 @@ class _DayCell extends StatelessWidget {
 
   final DateTime date;
   final DayEntry? entry;
-  final PersonId person;
+  final Profile person;
   final bool isToday;
   final bool isFuture;
   final int index;
@@ -378,7 +379,7 @@ class _DayCell extends StatelessWidget {
     final StatusStyle style;
     if (e == null) {
       style = p.none;
-    } else if (person == PersonId.faisal && e.allPrayersAre(PrayerStatus.jamaat)) {
+    } else if (person.mode == TrackingMode.jamaat && e.allPrayersAre(PrayerStatus.jamaat)) {
       style = p.jamaat;
     } else if (e.isPerfect) {
       style = p.solo;
@@ -415,7 +416,7 @@ class _DayCell extends StatelessWidget {
               ),
               if (e != null)
                 Text(
-                  '${ScoringRules.entryPoints(person, e)}',
+                  formatPoints(ScoringRules.entryPoints(person, e)),
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -485,7 +486,7 @@ class _DayList extends StatelessWidget {
   final int year;
   final int month;
   final DateTime today;
-  final PersonId person;
+  final Profile person;
   final Map<String, DayEntry> entries;
   final ValueChanged<DateTime> onTap;
 

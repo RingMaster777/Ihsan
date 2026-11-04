@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:tasks_for_allah/core/constants/app_constants.dart';
+import 'package:tasks_for_allah/features/tracker/domain/prayer.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -10,6 +12,7 @@ class NotificationService {
   static final NotificationService instance = NotificationService._();
 
   static const int _reminderId = 8001;
+  static const int _prayerBaseId = 8100;
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
@@ -87,7 +90,7 @@ class NotificationService {
 
       await _plugin.zonedSchedule(
         _reminderId,
-        'Tasks for Allah',
+        AppConstants.appName,
         "Time to record today's prayers, $personName",
         next,
         const NotificationDetails(
@@ -117,6 +120,51 @@ class NotificationService {
       await _plugin.cancel(_reminderId);
     } catch (e) {
       debugPrint('NotificationService: cancel failed ($e)');
+    }
+  }
+
+  /// Schedules a gentle nudge at each prayer time (daily repeating).
+  Future<void> schedulePrayerTimes(Map<PrayerType, DateTime> times) async {
+    if (!_ready || !_supported) return;
+    try {
+      for (var i = 0; i < PrayerType.values.length; i++) {
+        final prayer = PrayerType.values[i];
+        final when = tz.TZDateTime.from(times[prayer]!, tz.local);
+        await _plugin.zonedSchedule(
+          _prayerBaseId + i,
+          AppConstants.appName,
+          'It\'s ${prayer.english} time — take a moment to pray 🤲',
+          when,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'prayer_times',
+              'Prayer times',
+              channelDescription: 'A nudge at each prayer time',
+              importance: Importance.defaultImportance,
+              priority: Priority.defaultPriority,
+            ),
+            iOS: DarwinNotificationDetails(),
+            macOS: DarwinNotificationDetails(),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      }
+    } catch (e) {
+      debugPrint('NotificationService: prayer time scheduling failed ($e)');
+    }
+  }
+
+  Future<void> cancelPrayerTimes() async {
+    if (!_ready) return;
+    try {
+      for (var i = 0; i < PrayerType.values.length; i++) {
+        await _plugin.cancel(_prayerBaseId + i);
+      }
+    } catch (e) {
+      debugPrint('NotificationService: prayer time cancel failed ($e)');
     }
   }
 }

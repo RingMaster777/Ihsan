@@ -5,6 +5,14 @@ enum PrayerType {
   maghrib,
   isha;
 
+  static PrayerType? tryParse(Object? value) {
+    if (value is! String) return null;
+    for (final t in PrayerType.values) {
+      if (t.name == value) return t;
+    }
+    return null;
+  }
+
   String get english => switch (this) {
         PrayerType.fajr => 'Fajr',
         PrayerType.dhuhr => 'Dhuhr',

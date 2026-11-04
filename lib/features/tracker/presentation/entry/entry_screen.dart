@@ -33,7 +33,7 @@ class EntryScreen extends ConsumerStatefulWidget {
 }
 
 class _EntryScreenState extends ConsumerState<EntryScreen> {
-  late final PersonId _personId;
+  late final Profile _profile;
   late final DateTime _date;
   late final DayEntry _initial;
   late final bool _existing;
@@ -46,7 +46,9 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
   @override
   void initState() {
     super.initState();
-    _personId = ref.read(activePersonProvider) ?? PersonId.faisal;
+    final profiles = ref.read(profilesProvider);
+    _profile = ref.read(activeProfileProvider) ??
+        (profiles.isNotEmpty ? profiles.first : ProfilePresets.blank(TrackingMode.jamaat));
     final today = ref.read(todayProvider);
     final parsed = tryParseDateKey(widget.dateKey);
     // Never allow logging in the future.
@@ -125,29 +127,29 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final person = Person.of(_personId);
+    final person = _profile;
     final today = ref.watch(todayProvider);
-    final total = ScoringRules.entryPoints(_personId, _draft);
-    final maxTotal = ScoringRules.maxDailyPoints(_personId);
+    final total = ScoringRules.entryPoints(_profile, _draft);
+    final maxTotal = ScoringRules.maxDailyPoints(_profile);
     final canSave = _dirty || !_existing;
 
     final cards = <Widget>[
       for (final prayer in PrayerType.values)
         _PrayerLogCard(
           prayer: prayer,
-          personId: _personId,
+          profile: _profile,
           chosen: _draft.isChosen(prayer) ? _draft.statusOf(prayer) : null,
           onSelect: (s) => _setStatus(prayer, s),
         ),
-      if (ScoringRules.hasBonus(_personId))
-        _BonusCard(selected: _draft.bonus, onToggle: _toggleBonus),
+      if (ScoringRules.hasBonus(_profile))
+        _BonusCard(profile: _profile, selected: _draft.bonus, onToggle: _toggleBonus),
       _SummaryCard(
         total: total,
         maxTotal: maxTotal,
         isPerfect: _draft.isPerfect,
-        hasBonus: ScoringRules.hasBonus(_personId),
-        maxPrayer: ScoringRules.maxPrayerPointsPerDay(_personId),
-        maxBonus: ScoringRules.maxBonusPoints,
+        hasBonus: ScoringRules.hasBonus(_profile),
+        maxPrayer: ScoringRules.maxPrayerPointsPerDay(_profile),
+        maxBonus: ScoringRules.maxBonusPoints(_profile),
       ),
     ];
 
@@ -243,7 +245,7 @@ class _EntryHeader extends StatelessWidget {
     required this.onBack,
   });
 
-  final Person person;
+  final Profile person;
   final DateTime date;
   final DateTime today;
   final VoidCallback onBack;
@@ -297,7 +299,7 @@ class _EntryHeader extends StatelessWidget {
             ),
           ),
           PersonAvatar(
-            person: person,
+            profile: person,
             size: 40,
             borderWidth: 2,
             borderColor: Colors.white70,
@@ -312,21 +314,21 @@ class _EntryHeader extends StatelessWidget {
 class _PrayerLogCard extends StatelessWidget {
   const _PrayerLogCard({
     required this.prayer,
-    required this.personId,
+    required this.profile,
     required this.chosen,
     required this.onSelect,
   });
 
   final PrayerType prayer;
-  final PersonId personId;
+  final Profile profile;
   final PrayerStatus? chosen;
   final ValueChanged<PrayerStatus> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final points = chosen == null ? 0 : ScoringRules.prayerPoints(personId, prayer, chosen!);
-    final maxPoints = ScoringRules.maxPrayerPoints(personId, prayer);
+    final points = chosen == null ? 0 : ScoringRules.prayerPoints(profile, prayer, chosen!);
+    final maxPoints = ScoringRules.maxPrayerPoints(profile, prayer);
     final tint = prayer.tint;
 
     return AppCard(
@@ -391,13 +393,13 @@ class _PrayerLogCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              for (final status in ScoringRules.optionsFor(personId))
+              for (final status in ScoringRules.optionsFor(profile))
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 3),
                     child: _OptionPill(
                       status: status,
-                      points: ScoringRules.prayerPoints(personId, prayer, status),
+                      points: ScoringRules.prayerPoints(profile, prayer, status),
                       selected: chosen == status,
                       onTap: () => onSelect(status),
                     ),
@@ -472,8 +474,13 @@ class _OptionPill extends StatelessWidget {
 }
 
 class _BonusCard extends StatelessWidget {
-  const _BonusCard({required this.selected, required this.onToggle});
+  const _BonusCard({
+    required this.profile,
+    required this.selected,
+    required this.onToggle,
+  });
 
+  final Profile profile;
   final Set<String> selected;
   final ValueChanged<String> onToggle;
 
@@ -503,13 +510,13 @@ class _BonusCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'up to +${ScoringRules.maxBonusPoints}',
+                'up to +${formatPoints(ScoringRules.maxBonusPoints(profile))}',
                 style: TextStyle(fontSize: 11.5, color: p.textMuted, fontWeight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          for (final b in ScoringRules.bonusActivities)
+          for (final b in ScoringRules.bonusFor(profile))
             _BonusTile(
               activity: b,
               checked: selected.contains(b.id),
@@ -565,7 +572,7 @@ class _BonusTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: p.chip, borderRadius: BorderRadius.circular(8)),
                 child: Text(
-                  '+${activity.points}',
+                  '+${formatPoints(activity.points)}',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: p.chipFg),
                 ),
               ),
@@ -608,12 +615,12 @@ class _SummaryCard extends StatelessWidget {
     required this.maxBonus,
   });
 
-  final int total;
-  final int maxTotal;
+  final double total;
+  final double maxTotal;
   final bool isPerfect;
   final bool hasBonus;
   final int maxPrayer;
-  final int maxBonus;
+  final double maxBonus;
 
   @override
   Widget build(BuildContext context) {
@@ -636,6 +643,7 @@ class _SummaryCard extends StatelessWidget {
             duration: const Duration(milliseconds: 600),
             child: AnimatedCounter(
               value: total,
+              format: formatPoints,
               duration: const Duration(milliseconds: 450),
               style: TextStyle(
                 fontSize: 36,
@@ -655,7 +663,9 @@ class _SummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  hasBonus ? '$maxPrayer prayer + $maxBonus bonus pts max' : '$maxTotal pts max',
+                  hasBonus
+                      ? '$maxPrayer prayer + ${formatPoints(maxBonus)} bonus pts max'
+                      : '${formatPoints(maxTotal)} pts max',
                   style: TextStyle(fontSize: 11.5, color: p.textBody),
                 ),
                 AnimatedSize(

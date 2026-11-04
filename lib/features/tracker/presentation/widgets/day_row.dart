@@ -22,7 +22,7 @@ class DayRow extends StatelessWidget {
 
   final DateTime date;
   final DayEntry? entry;
-  final PersonId person;
+  final Profile person;
   final VoidCallback onTap;
   final bool isToday;
   final bool isFuture;
@@ -88,7 +88,7 @@ class DayRow extends StatelessWidget {
               SizedBox(
                 width: 38,
                 child: Text(
-                  points == null ? '—' : '$points',
+                  points == null ? '—' : formatPoints(points),
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     fontSize: 16,

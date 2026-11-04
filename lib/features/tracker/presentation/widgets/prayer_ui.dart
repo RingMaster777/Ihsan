@@ -41,5 +41,8 @@ IconData bonusIcon(String id) => switch (id) {
       'nolie' => Icons.handshake_rounded,
       'helped' => Icons.favorite_rounded,
       'dhikr' => Icons.auto_awesome_rounded,
+      'studies' => Icons.school_rounded,
+      'exercise' => Icons.directions_run_rounded,
+      'fasting' => Icons.nightlight_round,
       _ => Icons.star_rounded,
     };

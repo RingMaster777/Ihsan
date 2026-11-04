@@ -26,6 +26,10 @@ dependencies:
   timezone: ^0.9.4
   flutter_timezone: ^5.1.1
 
+  # Prayer times (offline) & home screen widget
+  adhan: ^2.0.0+1
+  home_widget: ^0.10.0
+
   # Motion
   flutter_animate: ^4.5.2
   confetti: ^0.8.0

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tasks_for_allah/core/constants/app_constants.dart';
 import 'package:tasks_for_allah/core/services/notification_service.dart';
 import 'package:tasks_for_allah/core/utils/date_helpers.dart';
+import 'package:tasks_for_allah/features/settings/application/prayer_settings.dart';
 import 'package:tasks_for_allah/features/tracker/application/tracker_providers.dart';
 
 @immutable
@@ -65,20 +66,28 @@ class ReminderCoordinator {
   Future<void> sync() async {
     final service = _ref.read(notificationServiceProvider);
     final settings = _ref.read(reminderProvider);
+    final prayerSettings = _ref.read(prayerSettingsProvider);
     final person = _ref.read(activeProfileProvider);
 
     if (!settings.enabled || person == null) {
       await service.cancelReminder();
-      return;
+    } else {
+      final today = dateOnly(DateTime.now());
+      final logged = _ref.read(entriesProvider).containsKey(toDateKey(today));
+      await service.scheduleDaily(
+        hour: settings.hour,
+        minute: settings.minute,
+        personName: person.name,
+        loggedToday: logged,
+      );
     }
-    final today = dateOnly(DateTime.now());
-    final logged = _ref.read(entriesProvider).containsKey(toDateKey(today));
-    await service.scheduleDaily(
-      hour: settings.hour,
-      minute: settings.minute,
-      personName: person.name,
-      loggedToday: logged,
-    );
+
+    // Nudges at each prayer time, independent of the evening reminder.
+    if (prayerSettings.notifyPrayers && person != null) {
+      await service.schedulePrayerTimes(_ref.read(prayerTimesTodayProvider).times);
+    } else {
+      await service.cancelPrayerTimes();
+    }
   }
 }
 

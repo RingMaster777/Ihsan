@@ -15,6 +15,7 @@ import 'package:tasks_for_allah/core/widgets/pressable_scale.dart';
 import 'package:tasks_for_allah/core/widgets/progress_ring.dart';
 import 'package:tasks_for_allah/core/widgets/tfa_header.dart';
 import 'package:tasks_for_allah/features/profile/domain/person.dart';
+import 'package:tasks_for_allah/features/settings/application/prayer_settings.dart';
 import 'package:tasks_for_allah/features/tracker/application/tracker_providers.dart';
 import 'package:tasks_for_allah/features/tracker/domain/day_entry.dart';
 import 'package:tasks_for_allah/features/tracker/domain/prayer.dart';
@@ -55,6 +56,7 @@ class HomeScreen extends ConsumerWidget {
       if (showReminder)
         _ReminderBanner(name: person.name, onTap: () => openEntry(todayKey)),
       _Greeting(greeting: greetingFor(now), person: person),
+      _NextPrayerCard(now: now),
       _TodayCard(
         person: person,
         today: today,
@@ -84,7 +86,7 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
-            WeekChart(days: week, maxPoints: ScoringRules.maxDailyPoints(person.id)),
+            WeekChart(days: week, maxPoints: ScoringRules.maxDailyPoints(person)),
           ],
         ),
       ),
@@ -114,7 +116,7 @@ class HomeScreen extends ConsumerWidget {
               DayRow(
                 date: r.key,
                 entry: r.value,
-                person: person.id,
+                person: person,
                 onTap: () => openEntry(toDateKey(r.key)),
               ),
           ],
@@ -128,7 +130,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Column(
       children: [
-        const TfaHeader(subtitle: AppConstants.tagline, big: true),
+        const TfaHeader(subtitle: AppConstants.taglineShort, big: true),
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 28),
@@ -148,7 +150,7 @@ class HomeScreen extends ConsumerWidget {
 class _Greeting extends StatelessWidget {
   const _Greeting({required this.greeting, required this.person});
   final String greeting;
-  final Person person;
+  final Profile person;
 
   @override
   Widget build(BuildContext context) {
@@ -183,11 +185,148 @@ class _Greeting extends StatelessWidget {
   }
 }
 
+class _NextPrayerCard extends ConsumerWidget {
+  const _NextPrayerCard({required this.now});
+
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final settings = ref.watch(prayerSettingsProvider);
+    final result = ref.watch(prayerTimesTodayProvider);
+    final next = result.nextAfter(now);
+    final nextTime = result.timeFor(next);
+    final remaining = nextTime.difference(now);
+    final allPassed = remaining.isNegative;
+
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [next.tint.withOpacity(0.3), next.tint.withOpacity(0.12)],
+                  ),
+                ),
+                child: Icon(next.icon, color: next.tint, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'NEXT PRAYER${allPassed ? ' · TOMORROW' : ''}',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w700,
+                        color: p.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: next.english,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                          ),
+                          TextSpan(
+                            text: '  ·  ${formatClock(nextTime)}',
+                            style: TextStyle(fontSize: 14, color: p.textBody),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: p.chip,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  allPassed ? 'tomorrow' : 'in ${formatCountdown(remaining)}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: p.primaryStrong,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final prayer in PrayerType.values)
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    decoration: BoxDecoration(
+                      color: prayer == next ? p.chip : p.track.withOpacity(0.35),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: prayer == next ? p.primary : Colors.transparent,
+                        width: 1.4,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          prayer.abbreviation,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: prayer == next ? p.primary : p.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          formatClock(result.timeFor(prayer)),
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: prayer == next ? FontWeight.w800 : FontWeight.w600,
+                            color: prayer == next ? p.primaryStrong : p.textBody,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '🕌 ${settings.city.name}',
+              style: TextStyle(fontSize: 9.5, color: p.textMuted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReminderBanner extends StatelessWidget {
   const _ReminderBanner({required this.name, required this.onTap});
   final String name;
   final VoidCallback onTap;
-
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -256,7 +395,7 @@ class _TodayCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final Person person;
+  final Profile person;
   final DateTime today;
   final DayEntry? entry;
   final VoidCallback onTap;
@@ -264,8 +403,8 @@ class _TodayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final points = ScoringRules.entryPoints(person.id, entry);
-    final maxPoints = ScoringRules.maxDailyPoints(person.id);
+    final points = ScoringRules.entryPoints(person, entry);
+    final maxPoints = ScoringRules.maxDailyPoints(person);
     final progress = maxPoints == 0 ? 0.0 : points / maxPoints;
     final hasEntry = entry != null;
 
@@ -286,6 +425,7 @@ class _TodayCard extends StatelessWidget {
                   children: [
                     AnimatedCounter(
                       value: points,
+                      format: formatPoints,
                       style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
@@ -294,7 +434,8 @@ class _TodayCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text('of $maxPoints', style: TextStyle(fontSize: 11, color: p.textMuted)),
+                    Text('of ${formatPoints(maxPoints)}',
+                        style: TextStyle(fontSize: 11, color: p.textMuted)),
                   ],
                 ),
               ),
@@ -423,7 +564,7 @@ class _PrayerChip extends StatelessWidget {
 
 class _MonthCard extends StatelessWidget {
   const _MonthCard({required this.points});
-  final int points;
+  final double points;
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +581,7 @@ class _MonthCard extends StatelessWidget {
           const SizedBox(height: 12),
           AnimatedCounter(
             value: points,
+            format: formatPoints,
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w800,
